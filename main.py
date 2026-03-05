@@ -19,17 +19,86 @@ import winreg
 import winsound
 import ctypes
 
+from win32event import CreateMutex
+from win32api import GetLastError
+from winerror import ERROR_ALREADY_EXISTS
+
 import configparser
 import pystray
 from PIL import Image, ImageDraw
+
+
 from click import click_center_three_times
 from click import click_center_three_times_test
 
 # =========================
+# SINGLE INSTANCE
+# =========================
+def ensure_single_instance(app_id: str, tray_window_name: str = None):
+    """
+    Гарантує запуск лише однієї копії.
+    app_id: унікальний рядок (напр. UUID).
+    tray_window_name: назва прихованого вікна вашої програми (якщо є).
+    """
+    # 1. Створюємо системний Мутекс
+    # Зберігаємо його в атрибуті функції, щоб Garbage Collector не видалив його
+    ensure_single_instance.mutex = CreateMutex(None, False, f"Global\\{app_id}")
+
+    if GetLastError() == ERROR_ALREADY_EXISTS:
+        # 2. Якщо програма вже працює, намагаємось знайти її вікно
+        if tray_window_name:
+            hwnd = win32gui.FindWindow(None, tray_window_name)
+            if hwnd:
+                # Навіть якщо вікна немає, ми можемо відправити системне повідомлення
+                # або просто вивести його з фону (якщо воно приховане)
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                win32gui.SetForegroundWindow(hwnd)
+
+        # 3. Завершуємо роботу дубліката
+        sys.exit(0)
+
+# =========================
 #   PATHS
 # =========================
-APP_DIR = Path(__file__).resolve().parent
-CONFIG_PATH = APP_DIR / "config.ini"
+# Визначаємо шлях до папки, де лежить EXE (або скрипт)
+if getattr(sys, 'frozen', False):
+    # Якщо програма скомпільована (EXE)
+    APP_DIR = os.path.dirname(sys.executable)
+else:
+    # Якщо програма запущена як звичайний .py скрипт
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Шлях до вашого конфігу поруч із EXE
+CONFIG_PATH = os.path.join(APP_DIR, 'config.ini')
+
+
+# =========================
+# AUTOSTART (REGISTRY)
+# =========================
+
+def ensure_autostart():
+    try:
+        exe = str(Path(sys.executable))
+
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0,
+            winreg.KEY_ALL_ACCESS
+        )
+
+        try:
+            current = winreg.QueryValueEx(key, "CS2Watcher")[0]
+        except FileNotFoundError:
+            current = None
+
+        if current != exe:
+            winreg.SetValueEx(key, "CS2Watcher", 0, winreg.REG_SZ, exe)
+
+        winreg.CloseKey(key)
+
+    except Exception:
+        pass
 
 
 # =========================
@@ -61,44 +130,26 @@ class AppConfig:
 
 
 def load_config(path: Path) -> AppConfig:
-    if not path.exists():
-        raise FileNotFoundError(f"Config not found: {path}")
-
     cp = configparser.ConfigParser()
     cp.read(path, encoding="utf-8")
 
-    tg_enabled = cp.getboolean("telegram", "enabled", fallback=False)
-    tg_token = cp.get("telegram", "token", fallback="").strip()
-    tg_chat_id = cp.get("telegram", "chat_id", fallback="").strip()
-
-    start_enabled = cp.getboolean("app", "start_enabled", fallback=True)
-    bring_cs2_to_front = cp.getboolean("app", "bring_cs2_to_front", fallback=True)
-    beep_on_match = cp.getboolean("app", "beep_on_match", fallback=True)
-    reservation_cooldown_sec = cp.getfloat("app", "reservation_cooldown_sec", fallback=5.0)
-    y_cordinate = cp.getint("app", "y_cordinate", fallback=0)
-
-    log_auto = cp.getboolean("log", "auto", fallback=True)
-    log_manual_path = cp.get("log", "manual_path", fallback="").strip()
-
-    match_keyword = cp.get("detect", "match_keyword", fallback="match_id").strip()
-    if not match_keyword:
-        match_keyword = "match_id"
-
-    console_enabled_default = cp.getboolean("console", "enabled_default", fallback=False)
-
     return AppConfig(
-        tg_enabled=tg_enabled,
-        tg_token=tg_token,
-        tg_chat_id=tg_chat_id,
-        start_enabled=start_enabled,
-        bring_cs2_to_front=bring_cs2_to_front,
-        beep_on_match=beep_on_match,
-        reservation_cooldown_sec=reservation_cooldown_sec,
-        y_cordinate=y_cordinate,
-        log_auto=log_auto,
-        log_manual_path=log_manual_path,
-        match_keyword=match_keyword,
-        console_enabled_default=console_enabled_default,
+        tg_enabled=cp.getboolean("telegram", "enabled", fallback=False),
+        tg_token=cp.get("telegram", "token", fallback="").strip(),
+        tg_chat_id=cp.get("telegram", "chat_id", fallback="").strip(),
+
+        start_enabled=cp.getboolean("app", "start_enabled", fallback=True),
+        bring_cs2_to_front=cp.getboolean("app", "bring_cs2_to_front", fallback=True),
+        beep_on_match=cp.getboolean("app", "beep_on_match", fallback=True),
+        reservation_cooldown_sec=cp.getfloat("app", "reservation_cooldown_sec", fallback=5),
+        y_cordinate=cp.getint("app", "y_cordinate", fallback=100),
+
+        log_auto=cp.getboolean("log", "auto", fallback=True),
+        log_manual_path=cp.get("log", "manual_path", fallback=""),
+
+        match_keyword=cp.get("detect", "match_keyword", fallback="match_id"),
+
+        console_enabled_default=cp.getboolean("console", "enabled_default", fallback=False),
     )
 
 
@@ -370,7 +421,7 @@ def focus_cs2_if_needed(cfg: AppConfig):
 
 
 # =========================
-#   WATCHER (only 3 outputs)
+#   REGEX - WATCHER (only 3 outputs)
 # =========================
 RE_PRIMARY_PING = re.compile(r"Selecting\s+.*?\bas primary\b.*?Ping\s*=\s*(\d+)", re.IGNORECASE)
 RE_RES_EXPIRED = re.compile(r"ReservationExpired", re.IGNORECASE)
@@ -530,6 +581,14 @@ def open_config(_icon=None, _item=None):
 
 
 def main():
+    # Вкажіть унікальний ID та назву вашої програми в треї
+    ensure_single_instance(
+        app_id="AutoAcceptCS2-6b7e0f2e-eba8-4007-b910-4bbf62a7f1c2",
+        tray_window_name="AutoAcceptCS2"
+    )
+
+    ensure_autostart()
+
     cfg = load_config(CONFIG_PATH)
 
     # console logging default from config (after restart must return to default)
@@ -598,6 +657,8 @@ def main():
 
     set_title()
     icon.run()
+
+    time.sleep(0.05)
 
 
 if __name__ == "__main__":
