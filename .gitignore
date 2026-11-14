@@ -11,3 +11,4 @@ assets/
 *.log
 exe_app.log
 .claude/settings.local.json
+release/
