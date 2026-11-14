@@ -1,158 +1,143 @@
-# AutoAcceptCS2 (CS2 console.log watcher + tray)
+# AutoAccept CS2
 
-A small Windows tray app that **tails CS2 `console.log` in real time**, detects a “match found” marker, and then:
-- prints **only** 3 user-facing messages (match found / ping / timeout),
-- optionally sends **Telegram** notifications,
-- optionally brings **Counter-Strike 2** to the foreground,
-- provides tray controls (enable/disable monitoring, console logging toggle, tests, open folder/config, exit).
+**English** · [Українська](README.uk.md)
 
-> **Note on fair play / ToS:** this project reads local logs and can trigger local actions. If you add any gameplay/UI automation, you’re responsible for complying with Steam/Valve rules and any server policies.
+A small Windows tray app that accepts a found **Counter-Strike 2** match for you, tells you about it on Telegram, and can
+automatically join a lobby when a friend from your list invites you.
 
----
+## What it does
 
-## How it works
-
-- The watcher reads `config.ini` and builds a regex from `detect.match_keyword` using the pattern `keyword=(digits)`.
-- It watches `console.log` (tail -f style) and reacts to three events:
-  1. **Match found**: a new `keyword=123...` value  
-  2. **Ping**: the first “Selecting … as primary … Ping = X” line after match found  
-  3. **Timeout**: `ReservationExpired` (deduplicated by cooldown)
-
-- The app can attempt to bring CS2 to the foreground using Win32 APIs (pywin32 + psutil).
-
----
+- **Auto-accept.** Watches CS2's `console.log`. When a match is found it brings CS2 to the front and clicks *Accept*.
+- **Telegram (optional).** Messages when a match is found, when the server ping arrives and when the reservation expires.
+  With your own bot you can also change the main settings with buttons.
+- **Friend invites (optional).** When a friend from your whitelist invites you to CS2, the app joins their lobby.
+  If CS2 is closed it launches the game first. CS2's confirmation boxes are closed for you.
+  A friend is recognised by Steam ID, never by name. Invites are ignored while another Steam game is running.
+- **Safe by design.** One message at a time to Telegram (no duplicates, no flood), every network call has a timeout,
+  the app survives a missing log, a locked config and a closed game.
+- English and Ukrainian interface, switchable live. Midnight Cyan dark theme.
 
 ## Requirements
 
-- **Windows 10/11**
-- **Python 3.12+** (tested with 3.13)
-- CS2 must write `console.log`. A common way is adding the Steam launch option `-condebug`, which writes console output to `...game\csgo\console.log`.
+- Windows 10 or 11.
+- Counter-Strike 2 installed through Steam.
+- For running from source only: Python 3.10 or newer.
 
----
+## Install
 
-## Project structure
+### Option A: ready-made exe (easiest)
+
+1. Open the **Releases** page of this repository and download `AutoAcceptCS2.exe`.
+2. Put it in any folder you like, for example `C:\Tools\AutoAcceptCS2\`. The app is portable: its settings and log are
+   created in a `data` folder next to the exe.
+3. Double-click it. The icon appears in the tray (bottom-right, maybe under the `^` arrow).
+
+Windows SmartScreen may warn about an unknown publisher because the exe is not code-signed: choose *More info → Run anyway*.
+
+### Option B: run or build from source
 
 ```
-AutoAcceptCS2/
-  main.py          # tray app + log watcher + config
-  click.py         # optional mouse-click helpers (pyautogui)
-  config.ini       # user settings
+git clone https://github.com/tankow79/AutoAcceptCS2.git
+cd AutoAcceptCS2
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.venv\Scripts\python.exe autoaccept.pyw
 ```
 
-`click.py` contains helper functions that use `pyautogui` to move/click at the screen center with an adjustable Y offset.
+Build your own exe: run `build.bat` (result: `out\AutoAcceptCS2.exe`).
+Tests: `.venv\Scripts\python.exe -m pytest -q`. Lint: `.venv\Scripts\python.exe -m ruff check .`
 
----
+## First run (5 minutes)
 
-## Installation
+1. **Tell CS2 to write its console log.** In Steam: Library → right-click *Counter-Strike 2* → Properties →
+   *General* → *Launch options*, and enter `-condebug`. Restart CS2 if it is running.
+   Without this option CS2 does not write `console.log` and nothing can be detected.
+2. **Start AutoAccept CS2** and open the tray icon → **Settings**.
+3. **Log page.** Leave *Find automatically* on. The app searches your Steam libraries. If it cannot find the log
+   (the status page says so), switch it off and pick `...\game\csgo\console.log` by hand.
+4. **Click page: set the Accept button position.** Start CS2, get to a screen where *Accept* is visible
+   (or use the test hotkey), then use *Calibrate with the mouse*: put the cursor on the *Accept* button and press the
+   capture hotkey (default **Ctrl+F8**). The position is saved as a percentage of the game window, so it keeps working
+   if you change the resolution. **Ctrl+F9** is a test click.
+5. **General page.** Turn on *Auto-accept*. Optionally turn on *Start with Windows*.
 
-Create & activate a venv, then:
+That is all for the basic function. The Status page shows whether the log is found and the game is detected.
 
-```bash
-pip install -U pywin32 psutil pystray pillow pyautogui
-```
+## Settings, page by page
 
----
+| Page | What it is for |
+| --- | --- |
+| **Status** | Live overview: auto-accept on/off, log found, CS2 running, accepted matches. |
+| **General** | Auto-accept switch, start with Windows, bring CS2 to front, sound on match, ignore repeats (cooldown). Interface language is the switch at the bottom of the window. |
+| **Click** | Accept button position (% of the window), delay before the click, number of clicks and interval, hotkeys. |
+| **Telegram** | Bot token, chat ID, test button, which events to send, remote control switch. |
+| **Friends** | Friend invites: switch, list of Steam IDs, restart Steam, calibrate OK. |
+| **Log** | Automatic or manual `console.log` path and the match keyword (default `match_id`). |
 
-## Configuration (`config.ini`)
+Settings are applied at once and saved to `data\config.json` next to the exe. The log is `data\app.log`.
 
-`main.py` reads these keys (with safe fallbacks):
+## Telegram notifications
 
-### `[telegram]`
-- `enabled` — enable/disable Telegram notifications (`true/false`)
-- `token` — bot token from **@BotFather**
-- `chat_id` — your chat id (number) or `@channelusername`
+1. In Telegram open [@BotFather](https://t.me/BotFather), send `/newbot`, follow the steps and copy the **token**
+   (looks like `123456789:AA...`).
+2. Open your new bot and press **Start** (a bot cannot write to you before that).
+3. Find your **chat ID**: the number of your private chat. The Telegram docs describe the field in the
+   [sendMessage method](https://core.telegram.org/bots/api#sendmessage); bots such as `@userinfobot` show your ID.
+4. In the app: Settings → **Telegram**: turn it on, paste the token and the chat ID, press **Test**.
+5. Choose which events you want to receive.
 
-**Security:** keep `token` private. If it leaks, regenerate it in @BotFather.
+### Control from Telegram (optional, your own bot only)
 
-### `[app]`
-- `start_enabled` — start monitoring immediately (`true/false`)
-- `bring_cs2_to_front` — bring CS2 to foreground when match is detected (`true/false`)
-- `beep_on_match` — beep on match (`true/false`)
-- `reservation_cooldown_sec` — dedupe window for repeated `ReservationExpired` logs (seconds)
-- `y_cordinate` — integer offset used by click helper functions (read with `getint`)
+Turn on *Control from Telegram* on the Telegram page, then send **/start** to your bot. You get buttons for
+auto-accept, sound, friend invites, which notifications to receive and the language.
 
-### `[detect]`
-- `match_keyword` — the keyword to detect match lines in the log.  
-  The watcher searches for `match_keyword=(digits)`.  
-  Default is `match_id`.
+> Telegram lets only **one** program read a bot's messages. Use this with **your own bot**. A bot shared by several
+> people can still send notifications, but control must stay off there. Only your private chat is obeyed.
 
-### `[console]`
-- `enabled_default` — whether console logging is ON by default at app start.
+## Friend invites (optional)
 
-> The tray toggle does **not** modify `config.ini`, so after restart it returns to this default (see comment in code).
+Lets a friend pull you into their lobby without you touching anything.
 
-### `[log]`
-- `auto` — auto-detect `console.log` path (`true/false`)
-- `manual_path` — used when `auto=false`
+1. Settings → **Friends**: turn on *Accept invites from listed friends*.
+2. Put the friends' Steam IDs into the list, one per line or separated by commas. Accepted forms:
+   Steam ID64 (`7656119…`), account ID, a profile link `https://steamcommunity.com/profiles/…`, or a custom link
+   `https://steamcommunity.com/id/name`. Names found in Steam's local data are shown under the list.
+3. Press **Restart Steam** (twice: the second click confirms). Steam creates a local debug port that the app listens to.
+   This is needed **once**. Later reboots and Steam restarts need nothing.
+4. Press **Calibrate OK**, wait for CS2's box (*Join another game?* or *Failed to join*) and click its **OK** button once.
+   The app remembers where OK is **for this window size**. After you change the game resolution, calibrate again
+   (the app reminds you on Telegram).
+5. Ask a friend to send an invite. The status line on the Friends page tells you what the app sees.
 
-Auto-detection tries:
-1) Steam via Windows `PATH`, then  
-2) Steam via registry, then  
-3) Steam libraries from `libraryfolders.vdf`.
+What happens next: the invite is read from Steam, the friend must be on your list, then the app joins the lobby.
+If CS2 is closed it starts the game, waits for the menu, joins, and clicks OK on the game's box.
+If another Steam game is running, the invite is ignored.
 
----
-
-## Running
-
-```bash
-python main.py
-```
-
-The app runs in the tray. When a match is detected it prints/sends:
-- `🎮 CS2: знайдено`
-- `📍 Ping: XX ms`
-- `⏱️ CS2: (схоже, матч не підтвердили/таймаут).`
-
----
-
-## Tray menu
-
-The tray menu includes:
-- Enable monitoring / Disable monitoring
-- Enable console logging / Disable console logging
-- Test click
-- Test Telegram
-- Open app folder
-- Open config.ini
-- Exit
-
-pystray menus are created by passing a `pystray.Menu` with `pystray.MenuItem` entries.
-
----
-
-## Building an EXE (PyInstaller)
-
-Install PyInstaller:
-
-```bash
-pip install -U pyinstaller
-```
-
-Build a single-file, no-console EXE and bundle `config.ini`:
-
-```bash
-pyinstaller --onefile --noconsole --add-data "config.ini;." main.py
-```
-
-- You can bundle data files via `--add-data` or in a spec file.
-- On **Windows**, `--add-data` uses a **semicolon** (`;`) separator between source and destination in the argument (e.g., `"config.ini;."`).
-
----
+**About the debug port.** The app creates an empty file `.cef-enable-remote-debugging` in the Steam folder. Steam then
+listens on `127.0.0.1:8080`, on this PC only, never on the network. Any program on your PC can use that port to drive
+Steam's interface, so switch the feature off and delete the file if you do not want that. If another program holds port
+8080, the status line names it.
 
 ## Troubleshooting
 
-### `console.log` not found / nothing happens
-- Ensure CS2 is writing `console.log` (often via launch option `-condebug`).
-- If auto-detect fails, set `[log] auto=false` and provide `manual_path`.
+| Problem | What to do |
+| --- | --- |
+| "Log not found" | Add `-condebug` to CS2's launch options, restart CS2, or pick `console.log` by hand on the Log page. |
+| The click misses the Accept button | Re-calibrate on the Click page (Ctrl+F8 with the cursor on the button). |
+| Telegram "Test" fails | Check the token, press Start in the bot, check the chat ID. Wrong settings pause sending; fixing them resumes it. |
+| Friends: "waiting for Steam" | Press **Restart Steam** once. |
+| Friends: "port 8080 is held by …" | Close that program, then restart Steam. |
+| The OK click misses | Press **Calibrate OK** again for the current resolution. |
+| The exe cannot be rebuilt | The app is still running and locks the file: quit it from the tray first. |
 
-### Telegram “FAILED”
-- Check `[telegram] enabled=true`, and verify `token` / `chat_id` values.
+## Privacy and safety
 
-### `ReservationExpired` prints multiple times
-- Increase `reservation_cooldown_sec` in `[app]` to reduce duplicates.
+- Nothing is sent anywhere except the Telegram messages you enable and, for profile links like `steamcommunity.com/id/name`,
+  one lookup on steamcommunity.com.
+- The bot token is stored in `data\config.json` in plain text: keep that folder private and never share it.
+- The app never reads or changes game memory and sends no input except the mouse click on *Accept*, and in friend mode the
+  click on the game's *OK* box.
 
----
+## License
 
-## Notes
-
-- If you add any UI automation (mouse/keyboard), do it responsibly and understand the risk of violating ToS.
+Add a license of your choice to the repository (for example MIT) before sharing it widely.
