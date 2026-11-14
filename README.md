@@ -17,7 +17,7 @@ automatically join a lobby when a friend from your list invites you.
 
 ## Quick start (ready-made release)
 
-1. Open the [**Releases**](../../releases) page (the newest release is at the top) and download **`AutoAcceptCS2.exe`**
+1. Open the [**Releases**](../../releases) page and download **`AutoAcceptCS2.exe`**
    (or the **`.zip`**: unpack it anywhere, it contains the same exe and these guides).
 2. Put the exe in its own folder, for example `C:\Tools\AutoAcceptCS2\`. Do not run it from inside the zip.
 3. Double-click it. If Windows SmartScreen warns about an unknown publisher (the exe is not code-signed), choose
