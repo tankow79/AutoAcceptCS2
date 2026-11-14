@@ -5,6 +5,29 @@
 A small Windows tray app that accepts a found **Counter-Strike 2** match for you, tells you about it on Telegram, and can
 automatically join a lobby when a friend from your list invites you.
 
+## Rules of use
+
+- Free for personal use. The program is provided "as is", without any warranty: you use it at your own risk.
+- It is an independent project, **not affiliated with or endorsed by Valve or Telegram**. Counter-Strike 2 and Steam are
+  trademarks of Valve Corporation.
+- It does not touch the game's memory or files. It reads CS2's `console.log`, simulates a mouse click on the *Accept*
+  button (and, in friend mode, on the game's *OK* box) and talks to Steam's local interface. You are responsible for
+  following the rules of the services you use.
+- Keep your Telegram bot token private: it is stored in `data\config.json` next to the exe.
+
+## Quick start (ready-made release)
+
+1. Open the [**Releases**](../../releases) page (the newest release is at the top) and download **`AutoAcceptCS2.exe`**
+   (or the **`.zip`**: unpack it anywhere, it contains the same exe and these guides).
+2. Put the exe in its own folder, for example `C:\Tools\AutoAcceptCS2\`. Do not run it from inside the zip.
+3. Double-click it. If Windows SmartScreen warns about an unknown publisher (the exe is not code-signed), choose
+   *More info → Run anyway*. The icon appears in the system tray (bottom-right, maybe under the `^` arrow).
+4. In Steam add the launch option `-condebug` to Counter-Strike 2 (details in [First run](#first-run-5-minutes)).
+5. Tray icon → **Settings**: pick the Accept button position on the *Click* page and turn on *Auto-accept*.
+
+Settings and the log are created in a `data` folder next to the exe. To update, replace the exe with the new one and
+keep the `data` folder. To uninstall, quit the app from the tray and delete its folder.
+
 ## What it does
 
 - **Auto-accept.** Watches CS2's `console.log`. When a match is found it brings CS2 to the front and clicks *Accept*.
