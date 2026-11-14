@@ -7,7 +7,7 @@ automatically join a lobby when a friend from your list invites you.
 
 ## Rules of use
 
-- Free for personal use. The program is provided "as is", without any warranty: you use it at your own risk.
+- Free to use under the MIT license. The program is provided "as is", without any warranty: you use it at your own risk.
 - It is an independent project, **not affiliated with or endorsed by Valve or Telegram**. Counter-Strike 2 and Steam are
   trademarks of Valve Corporation.
 - It does not touch the game's memory or files. It reads CS2's `console.log`, simulates a mouse click on the *Accept*
@@ -163,4 +163,4 @@ Steam's interface, so switch the feature off and delete the file if you do not w
 
 ## License
 
-Add a license of your choice to the repository (for example MIT) before sharing it widely.
+[MIT](LICENSE): free to use, copy, modify and share, with no warranty.
